@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Cutter</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Video Cutter App</h1>
+        <div id="upload-section">
+            <input type="file" id="video-upload" accept="video/*">
+            <button type="button" id="upload-btn">Upload Video</button>
+            <button type="button" id="test-btn">Test App</button>
+            <p style="font-size: 0.9rem; color: #666; margin-top: 10px;">⚠️ Max file size: ~100-200MB (nginx proxy limit)</p>
+        </div>
+        <div id="status" class="status status-ready">Status: Ready</div>
+        <div id="upload-progress" style="display: none; margin-bottom: 20px;">
+            <p id="upload-progress-text">Uploading video...</p>
+            <div class="progress-bar">
+                <div class="progress-fill" id="upload-progress-fill"></div>
+            </div>
+        </div>
+        <div id="video-info" style="display: none;">
+            <video id="video-preview" controls></video>
+            <p>Duration: <span id="duration"></span> seconds</p>
+        </div>
+        <div id="options" style="display: none;">
+            <label for="clip-length">Clip Length (seconds):</label>
+            <input type="number" id="clip-length" min="1">
+            <button type="button" id="calculate-btn">Calculate Clips</button>
+            <p id="clip-count"></p>
+            <label for="start-time">Start Time (seconds):</label>
+            <input type="number" id="start-time" min="0">
+            <label for="end-time">End Time (seconds):</label>
+            <input type="number" id="end-time" min="0">
+            <button type="button" id="recalculate-btn">Recalculate</button>
+            <button type="button" id="cut-btn">Start Cutting</button>
+        </div>
+        <div id="progress" style="display: none;">
+            <p>Cutting videos...</p>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+        </div>
+        <div id="downloads" style="display: none;">
+            <h2>Download Clips</h2>
+            <div id="clip-list"></div>
+        </div>
+        <div id="debug" style="display: none; margin-top: 20px;">
+            <h2>Debug Log</h2>
+            <pre id="debug-log" style="background: #f7f7f7; padding: 10px; border-radius: 6px; white-space: pre-wrap;
+                word-break: break-word; height: 180px; overflow-y: auto;"></pre>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html></content>
+<parameter name="filePath">/workspaces/il/public/index.html
