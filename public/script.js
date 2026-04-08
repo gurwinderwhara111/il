@@ -169,9 +169,8 @@ async function uploadVideo() {
         return;
     }
 
-    // Check file size and decide upload method
     const fileSizeMB = file.size / (1024 * 1024);
-    isChunkedUpload = fileSizeMB > 100; // Use chunked upload for files > 100MB
+    isChunkedUpload = fileSizeMB > 20;  // Use chunked upload for files >20MB
 
     setStatus(`Uploading ${file.name} (${fileSizeMB.toFixed(1)}MB)...`);
     setUploadProgress(0, `Preparing upload for ${file.name}...`);
@@ -187,15 +186,19 @@ async function uploadVideo() {
             data = await xhrUpload(file);
         }
 
-        uploadedFile = data.filename;
-        document.getElementById('video-preview').src = `/uploads/${uploadedFile}`;
+        uploadedFile = {
+            projectId: data.projectId,
+            filename: data.filename
+        };
+
+        const previewUrl = `/uploads/${uploadedFile.projectId}/${encodeURIComponent(uploadedFile.filename)}`;
+        document.getElementById('video-preview').src = previewUrl;
         document.getElementById('video-info').style.display = 'block';
         document.getElementById('options').style.display = 'block';
-        document.getElementById('file-manager').style.display = 'block';
         setUploadProgress(100, 'Upload complete.');
         setStatus('Upload successful. Fetching duration...');
 
-        const durationResponse = await fetch(`/duration/${uploadedFile}`);
+        const durationResponse = await fetch(`/duration/${uploadedFile.projectId}/${encodeURIComponent(uploadedFile.filename)}`);
         if (!durationResponse.ok) {
             const errorText = await durationResponse.text();
             setStatus(`Duration request failed: ${durationResponse.status} ${durationResponse.statusText}`, true);
@@ -211,9 +214,7 @@ async function uploadVideo() {
         setStatus(`Video ready: ${duration.toFixed(2)} seconds.`);
         setUploadProgress(100, 'Ready to cut.');
 
-        // Refresh file list
-        await loadFiles();
-
+        await loadProjects();
     } catch (error) {
         setStatus(error.message, true);
         logDebug(`Upload error: ${error.message}`, true);
@@ -244,6 +245,12 @@ function calculateClips() {
 }
 
 async function cutVideo() {
+    if (!uploadedFile) {
+        alert('Please upload a video first.');
+        setStatus('Cut blocked: no uploaded video.', true);
+        return;
+    }
+
     const clipLength = parseFloat(document.getElementById('clip-length').value);
     if (!clipLength || clipLength <= 0) {
         alert('Please enter a valid clip length.');
@@ -265,8 +272,7 @@ async function cutVideo() {
         return;
     }
 
-    const fileInput = document.getElementById('video-upload');
-    const originalName = fileInput.files[0]?.name?.split('.')[0] || 'video';
+    const originalName = uploadedFile.filename.split('.')[0] || 'video';
     logDebug(`Starting cutting: ${clipCount} clips from ${start}s to ${end}s.`);
     document.getElementById('progress').style.display = 'block';
     document.getElementById('progress-fill').style.width = '0%';
@@ -284,7 +290,8 @@ async function cutVideo() {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    filename: uploadedFile,
+                    projectId: uploadedFile.projectId,
+                    filename: uploadedFile.filename,
                     start: clipStart,
                     end: clipEnd,
                     output: outputName
@@ -319,7 +326,7 @@ async function cutVideo() {
         const outputName = `${originalName}_Part${i + 1}.mp4`;
         const li = document.createElement('li');
         const a = document.createElement('a');
-        a.href = `/uploads/${outputName}`;
+        a.href = `/uploads/${uploadedFile.projectId}/${encodeURIComponent(outputName)}`;
         a.download = outputName;
         a.textContent = outputName;
         li.appendChild(a);
@@ -334,8 +341,18 @@ async function loadStorageInfo() {
             throw new Error(`Failed to load storage info: ${response.statusText}`);
         }
         const data = await response.json();
+        const total = data.projects_size + data.temp_size;
+        const maxStorage = 2 * 1024 * 1024 * 1024; // 2GB max
+        const used = Math.min((total / maxStorage) * 100, 100);
+        
+        const storageSummaryEl = document.getElementById('storage-summary');
         if (storageSummaryEl) {
-            storageSummaryEl.textContent = `Storage usage: Videos ${formatBytes(data.videos_size)}, Clips ${formatBytes(data.clips_size)}, Temp ${formatBytes(data.temp_size)}, Total ${formatBytes(data.total_size)}`;
+            storageSummaryEl.textContent = `${formatBytes(data.projects_size)} used of ${formatBytes(maxStorage)}`;
+        }
+        
+        const storageFill = document.getElementById('storage-fill');
+        if (storageFill) {
+            storageFill.style.width = `${used}%`;
         }
     } catch (error) {
         logDebug(`Error loading storage info: ${error.message}`, true);
@@ -354,8 +371,7 @@ async function cleanupTempFiles() {
         }
         const data = await response.json();
         logDebug(`Temp cleanup complete: removed ${data.removed} folders.`);
-        await loadStorageInfo();
-        await loadFiles();
+        await loadProjects();
         alert('Temporary upload data cleaned up.');
     } catch (error) {
         logDebug(`Cleanup error: ${error.message}`, true);
@@ -363,91 +379,282 @@ async function cleanupTempFiles() {
     }
 }
 
-async function loadFiles() {
+async function loadProjects() {
     try {
-        const response = await fetch('/files');
+        const response = await fetch('/projects');
         if (!response.ok) {
-            throw new Error(`Failed to load files: ${response.statusText}`);
+            throw new Error(`Failed to load projects: ${response.statusText}`);
         }
 
         const data = await response.json();
-        displayFiles(data.videos, data.clips);
+        displayProjects(data.projects);
         await loadStorageInfo();
     } catch (error) {
-        logDebug(`Error loading files: ${error.message}`, true);
+        logDebug(`Error loading projects: ${error.message}`, true);
     }
 }
 
-function displayFiles(videos, clips) {
-    const videosList = document.getElementById('videos-list');
-    const clipsList = document.getElementById('clips-list');
-
-    if (videosList) {
-        videosList.innerHTML = '';
-        videos.forEach(file => {
-            const fileItem = createFileItem(file, 'video');
-            videosList.appendChild(fileItem);
-        });
+function displayProjects(projects) {
+    const list = document.getElementById('projects-list');
+    if (!list) {
+        return;
     }
 
-    if (clipsList) {
-        clipsList.innerHTML = '';
-        clips.forEach(file => {
-            const fileItem = createFileItem(file, 'clip');
-            clipsList.appendChild(fileItem);
-        });
+    list.innerHTML = '';
+    if (!projects || projects.length === 0) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">📁</div>
+                <div class="empty-state-title">No Projects Yet</div>
+                <div class="empty-state-text">Upload a video to get started and create your first project</div>
+            </div>
+        `;
+        updateProjectStats([], {});
+        return;
     }
-}
 
-function createFileItem(file, type) {
-    const item = document.createElement('div');
-    item.className = 'file-item';
-    item.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px; border: 1px solid #ddd; margin: 5px 0; border-radius: 4px;';
+    updateProjectStats(projects, {});
 
-    const info = document.createElement('div');
-    info.innerHTML = `
-        <strong>${file.name}</strong><br>
-        <small>Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB | Modified: ${new Date(file.modified * 1000).toLocaleString()}</small>
-    `;
+    projects.forEach(project => {
+        const projectItem = document.createElement('div');
+        projectItem.className = 'project-item';
 
-    const actions = document.createElement('div');
+        const header = document.createElement('div');
+        header.className = 'project-header';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'project-checkbox';
+        checkbox.value = project.projectId;
+        
+        const label = document.createElement('label');
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(' '));
+        
+        const headerInfo = document.createElement('div');
+        headerInfo.className = 'project-header-info';
+        
+        const title = document.createElement('div');
+        title.className = 'project-header-title';
+        title.textContent = project.name;
+        headerInfo.appendChild(title);
+        
+        const meta = document.createElement('div');
+        meta.className = 'project-header-meta';
+        
+        const clipBadge = document.createElement('div');
+        clipBadge.className = 'project-meta-badge';
+        clipBadge.innerHTML = `📹 ${project.clipCount} clip${project.clipCount !== 1 ? 's' : ''}`;
+        
+        const sizeMeta = document.createElement('span');
+        sizeMeta.className = 'project-meta-item';
+        sizeMeta.innerHTML = `📊 ${formatBytes(project.totalSize)}`;
+        
+        const dateMeta = document.createElement('span');
+        dateMeta.className = 'project-meta-item';
+        dateMeta.innerHTML = `📅 ${new Date(project.modified * 1000).toLocaleDateString()}`;
+        
+        meta.appendChild(clipBadge);
+        meta.appendChild(sizeMeta);
+        meta.appendChild(dateMeta);
+        headerInfo.appendChild(meta);
+        
+        label.appendChild(headerInfo);
+        header.appendChild(label);
+        projectItem.appendChild(header);
 
-    const downloadBtn = document.createElement('button');
-    downloadBtn.textContent = 'Download';
-    downloadBtn.onclick = () => window.open(`/uploads/${encodeURIComponent(file.name)}`, '_blank');
+        // Details section
+        const details = document.createElement('div');
+        details.className = 'project-details';
+        
+        const detailsRow1 = document.createElement('div');
+        detailsRow1.className = 'project-details-row';
+        detailsRow1.innerHTML = `
+            <div class="project-detail-item">
+                <span class="project-detail-label">Video File</span>
+                <a href="/uploads/${project.projectId}/${encodeURIComponent(project.videoName)}" 
+                   target="_blank" style="color: var(--primary); text-decoration: none; font-weight: 600;">${project.videoName}</a>
+            </div>
+            <div class="project-detail-item">
+                <span class="project-detail-label">Video Size</span>
+                <span class="project-detail-value">${formatBytes(project.videoSize)}</span>
+            </div>
+        `;
+        
+        const detailsRow2 = document.createElement('div');
+        detailsRow2.className = 'project-details-row';
+        detailsRow2.innerHTML = `
+            <div class="project-detail-item">
+                <span class="project-detail-label">Clips Size</span>
+                <span class="project-detail-value">${formatBytes(project.clipsSize)}</span>
+            </div>
+            <div class="project-detail-item">
+                <span class="project-detail-label">Last Modified</span>
+                <span class="project-detail-value">${new Date(project.modified * 1000).toLocaleString()}</span>
+            </div>
+        `;
+        
+        details.appendChild(detailsRow1);
+        details.appendChild(detailsRow2);
+        projectItem.appendChild(details);
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.style.cssText = 'background: #ff4444; color: white; border: none; padding: 5px 10px; margin-left: 10px; border-radius: 3px; cursor: pointer;';
-    deleteBtn.onclick = async () => {
-        if (confirm(`Delete ${file.name}?`)) {
-            try {
-                const response = await fetch(`/delete/${encodeURIComponent(file.name)}`, { method: 'DELETE' });
-                if (response.ok) {
-                    logDebug(`Deleted ${file.name}`);
-                    await loadFiles();
-                } else {
-                    throw new Error(`Delete failed: ${response.statusText}`);
-                }
-            } catch (error) {
-                logDebug(`Delete error: ${error.message}`, true);
-                alert('Delete failed. See debug log.');
-            }
+        // Clips section
+        if (project.clips && project.clips.length > 0) {
+            const clipsSection = document.createElement('div');
+            clipsSection.className = 'project-clips-section';
+            
+            const clipsTitle = document.createElement('div');
+            clipsTitle.className = 'project-clips-title';
+            clipsTitle.textContent = `Generated Clips (${project.clips.length})`;
+            clipsSection.appendChild(clipsTitle);
+            
+            const clipsList = document.createElement('div');
+            clipsList.className = 'project-clips-list';
+            
+            project.clips.forEach(clip => {
+                const clipItem = document.createElement('div');
+                clipItem.className = 'clip-item';
+                
+                const clipInfo = document.createElement('div');
+                clipInfo.className = 'clip-info';
+                
+                const clipName = document.createElement('a');
+                clipName.className = 'clip-name';
+                clipName.href = `/uploads/${project.projectId}/${encodeURIComponent(clip.name)}`;
+                clipName.target = '_blank';
+                clipName.textContent = clip.name;
+                
+                const clipSize = document.createElement('div');
+                clipSize.className = 'clip-size';
+                clipSize.textContent = formatBytes(clip.size);
+                
+                clipInfo.appendChild(clipName);
+                clipInfo.appendChild(clipSize);
+                clipItem.appendChild(clipInfo);
+                clipsList.appendChild(clipItem);
+            });
+            
+            clipsSection.appendChild(clipsList);
+            projectItem.appendChild(clipsSection);
         }
-    };
 
-    actions.appendChild(downloadBtn);
-    actions.appendChild(deleteBtn);
+        // Actions section
+        const actions = document.createElement('div');
+        actions.className = 'project-actions';
+        
+        const openBtn = document.createElement('button');
+        openBtn.className = 'btn btn-action btn-action-secondary';
+        openBtn.textContent = '👁 Preview';
+        openBtn.onclick = () => window.open(`/uploads/${project.projectId}/${encodeURIComponent(project.videoName)}`, '_blank');
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-action btn-action-danger';
+        deleteBtn.textContent = '🗑 Delete';
+        deleteBtn.onclick = () => deleteProject(project.projectId);
+        
+        actions.appendChild(openBtn);
+        actions.appendChild(deleteBtn);
+        projectItem.appendChild(actions);
 
-    item.appendChild(info);
-    item.appendChild(actions);
+        list.appendChild(projectItem);
+    });
+}
 
-    return item;
+function updateProjectStats(projects, storage) {
+    const statProjects = document.getElementById('stat-projects');
+    const statClips = document.getElementById('stat-clips');
+    const statStorage = document.getElementById('stat-storage');
+    
+    if (statProjects) statProjects.textContent = projects.length;
+    
+    if (statClips) {
+        const totalClips = projects.reduce((sum, p) => sum + (p.clipCount || 0), 0);
+        statClips.textContent = totalClips;
+    }
+    
+    if (statStorage) {
+        const totalSize = projects.reduce((sum, p) => sum + (p.totalSize || 0), 0);
+        statStorage.textContent = formatBytes(totalSize);
+    }
+}
+
+
+async function deleteProject(projectId, requireConfirm = true) {
+    if (requireConfirm && !confirm(`Delete project ${projectId} and all its files?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/projects/${encodeURIComponent(projectId)}`, { method: 'DELETE' });
+        if (!response.ok) {
+            throw new Error(`Delete failed: ${response.statusText}`);
+        }
+        await loadProjects();
+        logDebug(`Deleted project ${projectId}`);
+    } catch (error) {
+        logDebug(`Delete project error: ${error.message}`, true);
+        alert('Delete failed. See debug log.');
+    }
+}
+
+async function deleteSelectedProjects() {
+    const selected = Array.from(document.querySelectorAll('.project-checkbox:checked')).map(checkbox => checkbox.value);
+    if (selected.length === 0) {
+        alert('Select at least one project to delete.');
+        return;
+    }
+
+    if (!confirm(`Delete ${selected.length} selected project(s)?`)) {
+        return;
+    }
+
+    for (const projectId of selected) {
+        await deleteProject(projectId, false);
+    }
+}
+
+async function deleteAllProjects() {
+    if (!confirm('Delete all projects and free all storage?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/cleanup-all', { method: 'POST' });
+        if (!response.ok) {
+            throw new Error(`Cleanup failed: ${response.statusText}`);
+        }
+        const data = await response.json();
+        logDebug(`All projects deleted: ${data.removed}`);
+        await loadProjects();
+    } catch (error) {
+        logDebug(`Delete all error: ${error.message}`, true);
+        alert('Delete all failed. See debug log.');
+    }
+}
+
+function openTab(tabName) {
+    const uploadPage = document.getElementById('upload-page');
+    const managerPage = document.getElementById('manager-page');
+    const tabUpload = document.getElementById('tab-upload');
+    const tabManager = document.getElementById('tab-manager');
+
+    if (tabName === 'manager') {
+        uploadPage.style.display = 'none';
+        managerPage.style.display = 'block';
+        tabUpload.classList.remove('active');
+        tabManager.classList.add('active');
+        loadProjects();
+    } else {
+        uploadPage.style.display = 'block';
+        managerPage.style.display = 'none';
+        tabUpload.classList.add('active');
+        tabManager.classList.remove('active');
+    }
 }
 
 async function refreshFiles() {
     setStatus('Refreshing file list...');
-    await loadFiles();
+    await loadProjects();
     setStatus('File list refreshed.');
 }
 
@@ -463,7 +670,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     logDebug('Script loaded and DOM ready.');
     clearStatus();
     showUploadProgress(false);
-    document.getElementById('file-manager').style.display = 'block';
 
     const uploadBtn = document.getElementById('upload-btn');
     const testBtn = document.getElementById('test-btn');
@@ -486,9 +692,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     recalculateBtn?.addEventListener('click', calculateClips);
     cutBtn?.addEventListener('click', cutVideo);
 
-    // File manager
-    const refreshFilesBtn = document.getElementById('refresh-files-btn');
-    refreshFilesBtn?.addEventListener('click', refreshFiles);
+    // Tab navigation
+    document.getElementById('tab-upload')?.addEventListener('click', () => openTab('upload'));
+    document.getElementById('tab-manager')?.addEventListener('click', () => openTab('manager'));
+
+    // File manager controls
+    const refreshProjectsBtn = document.getElementById('refresh-projects-btn');
+    refreshProjectsBtn?.addEventListener('click', refreshFiles);
+
+    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+    deleteSelectedBtn?.addEventListener('click', deleteSelectedProjects);
+
+    const deleteAllBtn = document.getElementById('delete-all-btn');
+    deleteAllBtn?.addEventListener('click', deleteAllProjects);
 
     const cleanupTempBtn = document.getElementById('cleanup-temp-btn');
     cleanupTempBtn?.addEventListener('click', cleanupTempFiles);
@@ -496,8 +712,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize processing worker
     initProcessingWorker();
 
-    // Load current files and storage data
-    await loadFiles();
+    // Load current storage data
+    await loadProjects();
 });
 
 window.addEventListener('error', (event) => {

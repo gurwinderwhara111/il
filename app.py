@@ -10,19 +10,38 @@ import json
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 PUBLIC_FOLDER = os.path.join(BASE_DIR, 'public')
-
-# Create structured folders
-VIDEOS_FOLDER = os.path.join(UPLOAD_FOLDER, 'videos')
-CLIPS_FOLDER = os.path.join(UPLOAD_FOLDER, 'clips')
+PROJECTS_FOLDER = os.path.join(UPLOAD_FOLDER, 'projects')
 TEMP_FOLDER = os.path.join(UPLOAD_FOLDER, 'temp')
 
-for folder in [VIDEOS_FOLDER, CLIPS_FOLDER, TEMP_FOLDER]:
+for folder in [PROJECTS_FOLDER, TEMP_FOLDER]:
     os.makedirs(folder, exist_ok=True)
+
+
+def get_project_folder(project_id):
+    return os.path.join(PROJECTS_FOLDER, secure_filename(project_id))
+
+
+def get_project_video_folder(project_id):
+    return os.path.join(get_project_folder(project_id), 'video')
+
+
+def get_project_clips_folder(project_id):
+    return os.path.join(get_project_folder(project_id), 'clips')
+
+
+def find_original_video(project_id):
+    video_folder = get_project_video_folder(project_id)
+    if not os.path.isdir(video_folder):
+        return None
+    for filename in os.listdir(video_folder):
+        path = os.path.join(video_folder, filename)
+        if os.path.isfile(path):
+            return filename
+    return None
 
 app = Flask(__name__, static_folder=PUBLIC_FOLDER, static_url_path='')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['VIDEOS_FOLDER'] = VIDEOS_FOLDER
-app.config['CLIPS_FOLDER'] = CLIPS_FOLDER
+app.config['PROJECTS_FOLDER'] = PROJECTS_FOLDER
 app.config['TEMP_FOLDER'] = TEMP_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2GB max upload size
 
@@ -61,18 +80,21 @@ def upload_video():
         return 'File type not allowed', 400
 
     original_name = secure_filename(file.filename)
-    _, file_ext = os.path.splitext(original_name)
-    saved_name = f"{int(round(time.time() * 1000))}{file_ext}"
-    saved_path = os.path.join(app.config['VIDEOS_FOLDER'], saved_name)
+    project_id = str(int(round(time.time() * 1000)))
+    project_folder = get_project_folder(project_id)
+    os.makedirs(get_project_video_folder(project_id), exist_ok=True)
+    os.makedirs(get_project_clips_folder(project_id), exist_ok=True)
+
+    saved_path = os.path.join(get_project_video_folder(project_id), original_name)
     file.save(saved_path)
 
-    return jsonify(filename=saved_name)
+    return jsonify(projectId=project_id, filename=original_name)
 
 
-@app.route('/duration/<filename>')
-def duration(filename):
+@app.route('/duration/<project_id>/<filename>')
+def duration(project_id, filename):
     safe_name = secure_filename(filename)
-    file_path = os.path.join(app.config['VIDEOS_FOLDER'], safe_name)
+    file_path = os.path.join(get_project_video_folder(project_id), safe_name)
     if not os.path.exists(file_path):
         return 'File not found', 404
 
@@ -90,18 +112,19 @@ def cut_clip():
     if not data:
         return 'Invalid JSON', 400
 
+    project_id = data.get('projectId')
     filename = data.get('filename')
     start = data.get('start')
     end = data.get('end')
     output = data.get('output')
 
-    if not filename or start is None or end is None or not output:
+    if not project_id or not filename or start is None or end is None or not output:
         return 'Missing parameters', 400
 
     safe_filename = secure_filename(filename)
     safe_output = secure_filename(output)
-    input_path = os.path.join(app.config['VIDEOS_FOLDER'], safe_filename)
-    output_path = os.path.join(app.config['CLIPS_FOLDER'], safe_output)
+    input_path = os.path.join(get_project_video_folder(project_id), safe_filename)
+    output_path = os.path.join(get_project_clips_folder(project_id), safe_output)
 
     if not os.path.exists(input_path):
         return 'Source file not found', 404
@@ -148,9 +171,11 @@ def upload_chunk():
     # If this is the last chunk, combine all chunks
     if chunk_index == total_chunks - 1:
         final_filename = secure_filename(filename)
-        _, file_ext = os.path.splitext(final_filename)
-        saved_name = f"{int(round(time.time() * 1000))}{file_ext}"
-        final_path = os.path.join(app.config['VIDEOS_FOLDER'], saved_name)
+        project_id = file_id
+        project_folder = get_project_folder(project_id)
+        os.makedirs(get_project_video_folder(project_id), exist_ok=True)
+        os.makedirs(get_project_clips_folder(project_id), exist_ok=True)
+        final_path = os.path.join(get_project_video_folder(project_id), final_filename)
 
         try:
             with open(final_path, 'wb') as final_file:
@@ -162,46 +187,70 @@ def upload_chunk():
 
             # Clean up temp directory
             os.rmdir(temp_dir)
-            return jsonify(filename=saved_name, complete=True)
+            return jsonify(projectId=project_id, filename=final_filename, complete=True)
         except Exception as e:
             return f'File assembly failed: {str(e)}', 500
 
     return jsonify(chunkIndex=chunk_index, complete=False)
 
 
-@app.route('/files', methods=['GET'])
-def list_files():
-    """List all uploaded videos and clips"""
-    videos = []
+def build_project_metadata(project_id):
+    project_folder = get_project_folder(project_id)
+    video_folder = get_project_video_folder(project_id)
+    clips_folder = get_project_clips_folder(project_id)
+
+    original_name = find_original_video(project_id)
+    if original_name is None:
+        return None
+
+    video_path = os.path.join(video_folder, original_name)
+    video_stat = os.stat(video_path)
     clips = []
+    clips_size = 0
+    for clip_name in sorted(os.listdir(clips_folder)):
+        clip_path = os.path.join(clips_folder, clip_name)
+        if os.path.isfile(clip_path):
+            stat = os.stat(clip_path)
+            clips_size += stat.st_size
+            clips.append({
+                'name': clip_name,
+                'size': stat.st_size,
+                'modified': stat.st_mtime
+            })
 
+    total_size = video_stat.st_size + clips_size
+    return {
+        'projectId': project_id,
+        'name': original_name,
+        'videoName': original_name,
+        'videoSize': video_stat.st_size,
+        'clips': clips,
+        'clipCount': len(clips),
+        'clipsSize': clips_size,
+        'totalSize': total_size,
+        'modified': video_stat.st_mtime
+    }
+
+
+@app.route('/projects', methods=['GET'])
+def list_projects():
+    projects = []
     try:
-        for filename in os.listdir(app.config['VIDEOS_FOLDER']):
-            filepath = os.path.join(app.config['VIDEOS_FOLDER'], filename)
-            if os.path.isfile(filepath):
-                stat = os.stat(filepath)
-                videos.append({
-                    'name': filename,
-                    'size': stat.st_size,
-                    'modified': stat.st_mtime,
-                    'type': 'video'
-                })
-
-        for filename in os.listdir(app.config['CLIPS_FOLDER']):
-            filepath = os.path.join(app.config['CLIPS_FOLDER'], filename)
-            if os.path.isfile(filepath):
-                stat = os.stat(filepath)
-                clips.append({
-                    'name': filename,
-                    'size': stat.st_size,
-                    'modified': stat.st_mtime,
-                    'type': 'clip'
-                })
-
+        for project_id in sorted(os.listdir(app.config['PROJECTS_FOLDER'])):
+            project_folder = os.path.join(app.config['PROJECTS_FOLDER'], project_id)
+            if not os.path.isdir(project_folder):
+                continue
+            metadata = build_project_metadata(project_id)
+            if metadata:
+                projects.append(metadata)
     except Exception as e:
         return jsonify(error=str(e)), 500
+    return jsonify(projects=projects)
 
-    return jsonify(videos=videos, clips=clips)
+
+@app.route('/files', methods=['GET'])
+def list_files():
+    return list_projects()
 
 
 def get_folder_size(folder_path):
@@ -215,16 +264,40 @@ def get_folder_size(folder_path):
 @app.route('/storage', methods=['GET'])
 def storage_info():
     try:
-        videos_size = get_folder_size(app.config['VIDEOS_FOLDER'])
-        clips_size = get_folder_size(app.config['CLIPS_FOLDER'])
+        projects_size = get_folder_size(app.config['PROJECTS_FOLDER'])
         temp_size = get_folder_size(app.config['TEMP_FOLDER'])
-        total_size = videos_size + clips_size + temp_size
         return jsonify(
-            videos_size=videos_size,
-            clips_size=clips_size,
+            projects_size=projects_size,
             temp_size=temp_size,
-            total_size=total_size
+            total_size=projects_size + temp_size
         )
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+@app.route('/projects/<project_id>', methods=['DELETE'])
+def delete_project(project_id):
+    safe_id = secure_filename(project_id)
+    project_folder = get_project_folder(safe_id)
+    if not os.path.exists(project_folder):
+        return 'Project not found', 404
+    try:
+        shutil.rmtree(project_folder)
+        return jsonify(success=True, deleted=project_id)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+@app.route('/cleanup-all', methods=['POST'])
+def cleanup_all():
+    removed = 0
+    try:
+        for project_id in os.listdir(app.config['PROJECTS_FOLDER']):
+            project_folder = os.path.join(app.config['PROJECTS_FOLDER'], project_id)
+            if os.path.isdir(project_folder):
+                shutil.rmtree(project_folder, ignore_errors=True)
+                removed += 1
+        return jsonify(success=True, removed=removed)
     except Exception as e:
         return jsonify(error=str(e)), 500
 
@@ -243,43 +316,20 @@ def cleanup_temp():
         return jsonify(error=str(e)), 500
 
 
-@app.route('/delete/<filename>', methods=['DELETE'])
-def delete_file(filename):
-    """Delete a file from videos or clips folder"""
+@app.route('/uploads/<project_id>/<path:filename>')
+def uploaded_file(project_id, filename):
+    project_id = secure_filename(project_id)
     safe_name = secure_filename(filename)
-
-    # Check both folders
-    video_path = os.path.join(app.config['VIDEOS_FOLDER'], safe_name)
-    clip_path = os.path.join(app.config['CLIPS_FOLDER'], safe_name)
-
-    deleted = False
-    if os.path.exists(video_path):
-        os.remove(video_path)
-        deleted = True
-    elif os.path.exists(clip_path):
-        os.remove(clip_path)
-        deleted = True
-
-    if deleted:
-        return jsonify(success=True, deleted=safe_name)
-    else:
-        return 'File not found', 404
-
-
-@app.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    # Check both videos and clips folders
-    video_path = os.path.join(app.config['VIDEOS_FOLDER'], secure_filename(filename))
-    clip_path = os.path.join(app.config['CLIPS_FOLDER'], secure_filename(filename))
+    video_path = os.path.join(get_project_video_folder(project_id), safe_name)
+    clip_path = os.path.join(get_project_clips_folder(project_id), safe_name)
 
     if os.path.exists(video_path):
-        return send_from_directory(app.config['VIDEOS_FOLDER'], secure_filename(filename))
+        return send_from_directory(get_project_video_folder(project_id), safe_name)
     elif os.path.exists(clip_path):
-        return send_from_directory(app.config['CLIPS_FOLDER'], secure_filename(filename))
+        return send_from_directory(get_project_clips_folder(project_id), safe_name)
     else:
         abort(404)
 
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3000, debug=True)
-

@@ -8,72 +8,133 @@
 </head>
 <body>
     <div class="container">
-        <h1>Video Cutter App</h1>
-        <div id="upload-section">
-            <input type="file" id="video-upload" accept="video/*">
-            <button type="button" id="upload-btn">Upload Video</button>
-            <button type="button" id="test-btn">Test App</button>
-            <p style="font-size: 0.9rem; color: #666; margin-top: 10px;">⚠️ Large files (>100MB) use chunked upload. Max ~500MB supported.</p>
-        </div>
-        <div id="status" class="status status-ready">Status: Ready</div>
-        <div id="upload-progress" style="display: none; margin-bottom: 20px;">
-            <p id="upload-progress-text">Uploading video...</p>
-            <div class="progress-bar">
-                <div class="progress-fill" id="upload-progress-fill"></div>
+        <header>
+            <h1>Video Cutter</h1>
+            <div class="tabs" role="tablist" aria-label="Main navigation">
+                <button type="button" id="tab-upload" class="tab-button active" role="tab" aria-selected="true">Upload</button>
+                <button type="button" id="tab-manager" class="tab-button" role="tab" aria-selected="false">File Manager</button>
             </div>
-        </div>
-        <div id="video-info" style="display: none;">
-            <video id="video-preview" controls></video>
-            <p>Duration: <span id="duration"></span> seconds</p>
-        </div>
-        <div id="options" style="display: none;">
-            <label for="clip-length">Clip Length (seconds):</label>
-            <input type="number" id="clip-length" min="1">
-            <button type="button" id="calculate-btn">Calculate Clips</button>
-            <p id="clip-count"></p>
-            <label for="start-time">Start Time (seconds):</label>
-            <input type="number" id="start-time" min="0">
-            <label for="end-time">End Time (seconds):</label>
-            <input type="number" id="end-time" min="0">
-            <button type="button" id="recalculate-btn">Recalculate</button>
-            <button type="button" id="cut-btn">Start Cutting</button>
-        </div>
-        <div id="progress" style="display: none;">
-            <p>Cutting videos...</p>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progress-fill"></div>
-            </div>
-        </div>
-        <div id="downloads" style="display: none;">
-            <h2>Download Clips</h2>
-            <div id="clip-list"></div>
-        </div>
-        <div id="file-manager" style="display: none; margin-top: 30px;">
-            <h2>File Manager</h2>
-            <div id="storage-summary" style="margin-bottom: 12px; font-size: 0.95rem; color: #333;">
-                Storage: calculating...
-            </div>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
-                <button type="button" id="refresh-files-btn">Refresh Files</button>
-                <button type="button" id="cleanup-temp-btn">Cleanup Temp Files</button>
-            </div>
-            <div id="files-list" style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div id="videos-section">
-                    <h3>Uploaded Videos</h3>
-                    <div id="videos-list"></div>
+        </header>
+
+        <main>
+            <section id="upload-page" class="panel" aria-labelledby="tab-upload">
+                <div class="panel-body">
+                    <div class="upload-grid">
+                        <input type="file" id="video-upload" accept="video/*">
+                        <div class="button-row">
+                            <button type="button" id="upload-btn" class="btn btn-primary">Upload Video</button>
+                            <button type="button" id="test-btn" class="btn btn-secondary">Test App</button>
+                        </div>
+                    </div>
+
+                    <p class="note">Files larger than 20MB use automatic chunked upload for reliability. This interface supports modern browser uploads up to 2GB.</p>
+                    <div id="status" class="status status-ready">Status: Ready</div>
+
+                    <div id="upload-progress" class="panel-body" style="display: none;">
+                        <p id="upload-progress-text">Uploading video...</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="upload-progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <div id="video-info" style="display: none;">
+                        <video id="video-preview" controls></video>
+                        <p>Duration: <span id="duration"></span> seconds</p>
+                    </div>
+
+                    <div id="options" style="display: none;" class="panel-body">
+                        <div class="form-grid">
+                            <label for="clip-length">
+                                Clip Length (seconds)
+                                <input type="number" id="clip-length" min="1" placeholder="Seconds">
+                            </label>
+                            <label for="start-time">
+                                Start Time (seconds)
+                                <input type="number" id="start-time" min="0" placeholder="Start">
+                            </label>
+                            <label for="end-time">
+                                End Time (seconds)
+                                <input type="number" id="end-time" min="0" placeholder="End">
+                            </label>
+                        </div>
+
+                        <div style="padding: 12px 0; text-align: center; color: var(--text-muted);">
+                            <p id="clip-count" style="margin: 0; font-weight: 600; color: var(--primary);"></p>
+                        </div>
+
+                        <div class="manager-actions">
+                            <button type="button" id="calculate-btn" class="btn btn-secondary">Calculate Clips</button>
+                            <button type="button" id="recalculate-btn" class="btn btn-secondary">Recalculate</button>
+                            <button type="button" id="cut-btn" class="btn btn-primary">Start Cutting</button>
+                        </div>
+                    </div>
+
+                    <div id="progress" style="display: none;">
+                        <p>Cutting videos...</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <div id="downloads" style="display: none;">
+                        <h2>Download Clips</h2>
+                        <ol id="clip-list"></ol>
+                    </div>
                 </div>
-                <div id="clips-section">
-                    <h3>Generated Clips</h3>
-                    <div id="clips-list"></div>
+            </section>
+
+            <section id="manager-page" class="panel" style="display: none;" aria-labelledby="tab-manager">
+                <div class="manager-header">
+                    <div>
+                        <h2>Project File Manager</h2>
+                        <p>Organize, manage, and preview all your video projects in one professional interface.</p>
+                    </div>
                 </div>
-            </div>
-        </div>
-        <div id="debug" style="display: none; margin-top: 20px;">
-            <h2>Debug Log</h2>
-            <pre id="debug-log" style="background: #f7f7f7; padding: 10px; border-radius: 6px; white-space: pre-wrap;
-                word-break: break-word; height: 180px; overflow-y: auto;"></pre>
-        </div>
+
+                <div class="projects-header">
+                    <div class="storage-info">
+                        <div class="storage-bar">
+                            <label>Storage:</label>
+                            <div class="storage-progress">
+                                <div class="storage-fill" id="storage-fill"></div>
+                            </div>
+                        </div>
+                        <span class="storage-text" id="storage-summary">Calculating...</span>
+                    </div>
+                </div>
+
+                <div class="manager-stats">
+                    <div class="stat-card">
+                        <div class="stat-card-value" id="stat-projects">0</div>
+                        <div class="stat-card-label">Projects</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-value" id="stat-clips">0</div>
+                        <div class="stat-card-label">Total Clips</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-value" id="stat-storage">0 MB</div>
+                        <div class="stat-card-label">Used Storage</div>
+                    </div>
+                </div>
+
+                <div class="manager-actions" style="margin-bottom: 24px;">
+                    <button type="button" id="refresh-projects-btn" class="btn btn-secondary">↻ Refresh</button>
+                    <button type="button" id="delete-selected-btn" class="btn btn-danger">🗑 Delete Selected</button>
+                    <button type="button" id="delete-all-btn" class="btn btn-danger">⚠ Delete All Projects</button>
+                    <button type="button" id="cleanup-temp-btn" class="btn btn-secondary">🧹 Cleanup Temp Files</button>
+                </div>
+
+                <div id="projects-list" class="projects-list"></div>
+            </section>
+
+            <section id="debug" class="panel debug-panel" style="display: none;">
+                <h2>Debug Log</h2>
+                <pre id="debug-log"></pre>
+            </section>
+        </main>
     </div>
+
     <script src="script.js"></script>
 </body>
 </html></content>

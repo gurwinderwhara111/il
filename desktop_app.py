@@ -5,6 +5,7 @@ import threading
 import os
 import subprocess
 import time
+import platform
 from datetime import datetime
 from urllib.parse import quote
 from flask import Flask, request, jsonify, send_from_directory
@@ -14,7 +15,8 @@ class VideoCutterDesktop:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Video Cutter Pro - Desktop")
-        self.root.geometry("800x600")
+        self.root.geometry("900x700")
+        self.uploads_folder = os.path.join(os.path.dirname(__file__), 'uploads')
 
         # Start Flask server in background
         self.flask_thread = threading.Thread(target=self.start_flask_server, daemon=True)
@@ -70,7 +72,8 @@ class VideoCutterDesktop:
 
         ttk.Button(button_frame, text="Upload & Process", command=self.process_video).grid(row=0, column=0, padx=10)
         ttk.Button(button_frame, text="Open Web Interface", command=self.open_web).grid(row=0, column=1, padx=10)
-        ttk.Button(button_frame, text="Exit", command=self.root.quit).grid(row=0, column=2, padx=10)
+        ttk.Button(button_frame, text="Open Uploads Folder", command=self.open_uploads_folder).grid(row=0, column=2, padx=10)
+        ttk.Button(button_frame, text="Exit", command=self.root.quit).grid(row=0, column=3, padx=10)
 
         # Results
         results_frame = ttk.LabelFrame(main_frame, text="Generated Clips", padding="10")
@@ -110,6 +113,7 @@ class VideoCutterDesktop:
         ttk.Button(file_buttons, text="Open Selected", command=self.open_selected_file).grid(row=0, column=1, padx=5)
         ttk.Button(file_buttons, text="Delete Selected", command=self.delete_selected_file).grid(row=0, column=2, padx=5)
         ttk.Button(file_buttons, text="Cleanup Temp", command=self.cleanup_temp_files).grid(row=0, column=3, padx=5)
+        ttk.Button(file_buttons, text="Open Uploads Folder", command=self.open_uploads_folder).grid(row=0, column=4, padx=5)
 
         # Configure grid weights
         self.root.columnconfigure(0, weight=1)
@@ -206,6 +210,17 @@ class VideoCutterDesktop:
             self.refresh_file_list()
         except Exception as e:
             messagebox.showerror('Error', f'Cleanup failed: {e}')
+
+    def open_uploads_folder(self):
+        try:
+            if os.name == 'nt':
+                os.startfile(self.uploads_folder)
+            elif platform.system() == 'Darwin':
+                subprocess.Popen(['open', self.uploads_folder])
+            else:
+                subprocess.Popen(['xdg-open', self.uploads_folder])
+        except Exception as e:
+            messagebox.showerror('Error', f'Unable to open uploads folder: {e}')
 
     def format_size(self, size):
         if size == 0:
