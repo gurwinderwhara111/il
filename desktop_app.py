@@ -5,6 +5,8 @@ import threading
 import os
 import subprocess
 import time
+from datetime import datetime
+from urllib.parse import quote
 from flask import Flask, request, jsonify, send_from_directory
 import webbrowser
 
@@ -81,12 +83,43 @@ class VideoCutterDesktop:
         self.results_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
 
+        # File manager
+        file_manager_frame = ttk.LabelFrame(main_frame, text="File Manager", padding="10")
+        file_manager_frame.grid(row=7, column=0, columnspan=3, pady=10, sticky=(tk.W, tk.E))
+
+        self.storage_label = ttk.Label(file_manager_frame, text="Storage: calculating...")
+        self.storage_label.grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=(0, 8))
+
+        self.files_tree = ttk.Treeview(file_manager_frame, columns=("type", "size", "modified"), show='headings', height=10)
+        self.files_tree.heading("type", text="Type")
+        self.files_tree.heading("size", text="Size")
+        self.files_tree.heading("modified", text="Modified")
+        self.files_tree.column("type", width=80, anchor='center')
+        self.files_tree.column("size", width=110, anchor='center')
+        self.files_tree.column("modified", width=200, anchor='center')
+        self.files_tree.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+        self.files_tree_scroll = ttk.Scrollbar(file_manager_frame, orient=tk.VERTICAL, command=self.files_tree.yview)
+        self.files_tree.configure(yscrollcommand=self.files_tree_scroll.set)
+        self.files_tree_scroll.grid(row=1, column=3, sticky=(tk.N, tk.S))
+
+        file_buttons = ttk.Frame(file_manager_frame)
+        file_buttons.grid(row=2, column=0, columnspan=3, pady=10, sticky=(tk.W, tk.E))
+
+        ttk.Button(file_buttons, text="Refresh Files", command=self.refresh_file_list).grid(row=0, column=0, padx=5)
+        ttk.Button(file_buttons, text="Open Selected", command=self.open_selected_file).grid(row=0, column=1, padx=5)
+        ttk.Button(file_buttons, text="Delete Selected", command=self.delete_selected_file).grid(row=0, column=2, padx=5)
+        ttk.Button(file_buttons, text="Cleanup Temp", command=self.cleanup_temp_files).grid(row=0, column=3, padx=5)
+
         # Configure grid weights
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         results_frame.columnconfigure(0, weight=1)
         results_frame.rowconfigure(0, weight=1)
+        file_manager_frame.columnconfigure(0, weight=1)
+        file_manager_frame.columnconfigure(1, weight=1)
+        file_manager_frame.columnconfigure(2, weight=1)
 
     def select_file(self):
         filename = filedialog.askopenfilename(
@@ -102,12 +135,114 @@ class VideoCutterDesktop:
             response = requests.get("http://127.0.0.1:3000", timeout=2)
             if response.status_code == 200:
                 self.status_label.config(text="Server ready")
+                self.root.after(100, self.refresh_file_list)
             else:
                 self.status_label.config(text="Server starting...")
                 self.root.after(2000, self.check_server)
         except:
             self.status_label.config(text="Starting server...")
             self.root.after(2000, self.check_server)
+
+    def refresh_file_list(self):
+        try:
+            response = requests.get("http://127.0.0.1:3000/files", timeout=5)
+            if response.status_code != 200:
+                raise Exception(response.text)
+
+            data = response.json()
+            self.videos_listbox.delete(0, tk.END)
+            self.clips_listbox.delete(0, tk.END)
+
+            for video in data.get('videos', []):
+                self.videos_listbox.insert(tk.END, video['name'])
+            for clip in data.get('clips', []):
+                self.clips_listbox.insert(tk.END, clip['name'])
+
+            self.status_label.config(text='File list refreshed')
+        except Exception as e:
+            self.status_label.config(text=f'File list error')
+            print('File manager error:', e)
+
+    def open_selected_file(self):
+        selection = self.files_tree.selection()
+        if not selection:
+            messagebox.showwarning('Select file', 'Please select a file to open')
+            return
+
+        filename = self.files_tree.item(selection[0], 'text')
+        webbrowser.open(f'http://127.0.0.1:3000/uploads/{quote(filename)}')
+
+    def delete_selected_file(self):
+        selection = self.files_tree.selection()
+        if not selection:
+            messagebox.showwarning('Select file', 'Please select a file to delete')
+            return
+
+        filename = self.files_tree.item(selection[0], 'text')
+        if not messagebox.askyesno('Delete file', f'Delete {filename}?'):
+            return
+
+        try:
+            url = f'http://127.0.0.1:3000/delete/{quote(filename)}'
+            response = requests.delete(url, timeout=5)
+            if response.status_code == 200:
+                messagebox.showinfo('Deleted', f'{filename} deleted')
+                self.refresh_file_list()
+            else:
+                raise Exception(response.text)
+        except Exception as e:
+            messagebox.showerror('Error', f'Unable to delete file: {e}')
+
+    def cleanup_temp_files(self):
+        if not messagebox.askyesno('Cleanup Temp Files', 'Remove temporary upload chunks and free storage?'):
+            return
+
+        try:
+            response = requests.post('http://127.0.0.1:3000/cleanup-temp', timeout=10)
+            if response.status_code != 200:
+                raise Exception(response.text)
+            data = response.json()
+            messagebox.showinfo('Cleanup Complete', f'Removed {data.get("removed", 0)} temp folders.')
+            self.refresh_file_list()
+        except Exception as e:
+            messagebox.showerror('Error', f'Cleanup failed: {e}')
+
+    def format_size(self, size):
+        if size == 0:
+            return '0 B'
+        suffixes = ['B', 'KB', 'MB', 'GB', 'TB']
+        i = 0
+        while size >= 1024 and i < len(suffixes) - 1:
+            size /= 1024.0
+            i += 1
+        return f'{size:.2f} {suffixes[i]}'
+
+    def refresh_file_list(self):
+        try:
+            response = requests.get('http://127.0.0.1:3000/files', timeout=5)
+            if response.status_code != 200:
+                raise Exception(response.text)
+
+            data = response.json()
+            self.files_tree.delete(*self.files_tree.get_children())
+
+            for video in data.get('videos', []):
+                self.files_tree.insert('', 'end', text=video['name'], values=(video['type'], self.format_size(video['size']), datetime.fromtimestamp(video['modified']).strftime('%Y-%m-%d %H:%M:%S')))
+            for clip in data.get('clips', []):
+                self.files_tree.insert('', 'end', text=clip['name'], values=(clip['type'], self.format_size(clip['size']), datetime.fromtimestamp(clip['modified']).strftime('%Y-%m-%d %H:%M:%S')))
+
+            self.status_label.config(text='File list refreshed')
+        except Exception as e:
+            self.status_label.config(text='File list error')
+            print('File manager error:', e)
+
+        try:
+            response = requests.get('http://127.0.0.1:3000/storage', timeout=5)
+            if response.status_code == 200:
+                storage = response.json()
+                self.storage_label.config(text=f"Video: {self.format_size(storage['videos_size'])}, Clips: {self.format_size(storage['clips_size'])}, Temp: {self.format_size(storage['temp_size'])}, Total: {self.format_size(storage['total_size'])}")
+        except Exception as e:
+            print('Storage info error:', e)
 
     def start_flask_server(self):
         # Import here to avoid circular imports

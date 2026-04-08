@@ -9,6 +9,7 @@ let statusEl = null;
 let uploadProgressEl = null;
 let uploadProgressFill = null;
 let uploadProgressText = null;
+let storageSummaryEl = null;
 let isChunkedUpload = false;
 let currentUploadId = null;
 
@@ -64,6 +65,13 @@ function setUploadProgress(percent, message) {
     if (!uploadProgressFill || !uploadProgressText) return;
     uploadProgressFill.style.width = `${percent}%`;
     uploadProgressText.textContent = message;
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
 }
 
 function logDebug(message, isError = false) {
@@ -319,6 +327,42 @@ async function cutVideo() {
     }
 }
 
+async function loadStorageInfo() {
+    try {
+        const response = await fetch('/storage');
+        if (!response.ok) {
+            throw new Error(`Failed to load storage info: ${response.statusText}`);
+        }
+        const data = await response.json();
+        if (storageSummaryEl) {
+            storageSummaryEl.textContent = `Storage usage: Videos ${formatBytes(data.videos_size)}, Clips ${formatBytes(data.clips_size)}, Temp ${formatBytes(data.temp_size)}, Total ${formatBytes(data.total_size)}`;
+        }
+    } catch (error) {
+        logDebug(`Error loading storage info: ${error.message}`, true);
+    }
+}
+
+async function cleanupTempFiles() {
+    if (!confirm('Delete all temporary chunk upload data?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/cleanup-temp', { method: 'POST' });
+        if (!response.ok) {
+            throw new Error(`Cleanup failed: ${response.statusText}`);
+        }
+        const data = await response.json();
+        logDebug(`Temp cleanup complete: removed ${data.removed} folders.`);
+        await loadStorageInfo();
+        await loadFiles();
+        alert('Temporary upload data cleaned up.');
+    } catch (error) {
+        logDebug(`Cleanup error: ${error.message}`, true);
+        alert('Cleanup failed. See debug log.');
+    }
+}
+
 async function loadFiles() {
     try {
         const response = await fetch('/files');
@@ -328,6 +372,7 @@ async function loadFiles() {
 
         const data = await response.json();
         displayFiles(data.videos, data.clips);
+        await loadStorageInfo();
     } catch (error) {
         logDebug(`Error loading files: ${error.message}`, true);
     }
@@ -369,7 +414,7 @@ function createFileItem(file, type) {
 
     const downloadBtn = document.createElement('button');
     downloadBtn.textContent = 'Download';
-    downloadBtn.onclick = () => window.open(`/uploads/${file.name}`, '_blank');
+    downloadBtn.onclick = () => window.open(`/uploads/${encodeURIComponent(file.name)}`, '_blank');
 
     const deleteBtn = document.createElement('button');
     deleteBtn.textContent = 'Delete';
@@ -377,7 +422,7 @@ function createFileItem(file, type) {
     deleteBtn.onclick = async () => {
         if (confirm(`Delete ${file.name}?`)) {
             try {
-                const response = await fetch(`/delete/${file.name}`, { method: 'DELETE' });
+                const response = await fetch(`/delete/${encodeURIComponent(file.name)}`, { method: 'DELETE' });
                 if (response.ok) {
                     logDebug(`Deleted ${file.name}`);
                     await loadFiles();
@@ -406,17 +451,19 @@ async function refreshFiles() {
     setStatus('File list refreshed.');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     debugEl = document.getElementById('debug');
     debugLog = document.getElementById('debug-log');
     statusEl = document.getElementById('status');
     uploadProgressEl = document.getElementById('upload-progress');
     uploadProgressFill = document.getElementById('upload-progress-fill');
     uploadProgressText = document.getElementById('upload-progress-text');
+    storageSummaryEl = document.getElementById('storage-summary');
 
     logDebug('Script loaded and DOM ready.');
     clearStatus();
     showUploadProgress(false);
+    document.getElementById('file-manager').style.display = 'block';
 
     const uploadBtn = document.getElementById('upload-btn');
     const testBtn = document.getElementById('test-btn');
@@ -443,8 +490,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshFilesBtn = document.getElementById('refresh-files-btn');
     refreshFilesBtn?.addEventListener('click', refreshFiles);
 
+    const cleanupTempBtn = document.getElementById('cleanup-temp-btn');
+    cleanupTempBtn?.addEventListener('click', cleanupTempFiles);
+
     // Initialize processing worker
     initProcessingWorker();
+
+    // Load current files and storage data
+    await loadFiles();
 });
 
 window.addEventListener('error', (event) => {

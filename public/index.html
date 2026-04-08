@@ -50,8 +50,14 @@
         </div>
         <div id="file-manager" style="display: none; margin-top: 30px;">
             <h2>File Manager</h2>
-            <button type="button" id="refresh-files-btn">Refresh Files</button>
-            <div id="files-list" style="margin-top: 20px;">
+            <div id="storage-summary" style="margin-bottom: 12px; font-size: 0.95rem; color: #333;">
+                Storage: calculating...
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                <button type="button" id="refresh-files-btn">Refresh Files</button>
+                <button type="button" id="cleanup-temp-btn">Cleanup Temp Files</button>
+            </div>
+            <div id="files-list" style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <div id="videos-section">
                     <h3>Uploaded Videos</h3>
                     <div id="videos-list"></div>

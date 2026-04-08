@@ -204,6 +204,45 @@ def list_files():
     return jsonify(videos=videos, clips=clips)
 
 
+def get_folder_size(folder_path):
+    total_size = 0
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            total_size += os.path.getsize(os.path.join(root, file))
+    return total_size
+
+
+@app.route('/storage', methods=['GET'])
+def storage_info():
+    try:
+        videos_size = get_folder_size(app.config['VIDEOS_FOLDER'])
+        clips_size = get_folder_size(app.config['CLIPS_FOLDER'])
+        temp_size = get_folder_size(app.config['TEMP_FOLDER'])
+        total_size = videos_size + clips_size + temp_size
+        return jsonify(
+            videos_size=videos_size,
+            clips_size=clips_size,
+            temp_size=temp_size,
+            total_size=total_size
+        )
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+@app.route('/cleanup-temp', methods=['POST'])
+def cleanup_temp():
+    try:
+        removed_count = 0
+        for entry in os.listdir(app.config['TEMP_FOLDER']):
+            path = os.path.join(app.config['TEMP_FOLDER'], entry)
+            if os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
+                removed_count += 1
+        return jsonify(success=True, removed=removed_count)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
 @app.route('/delete/<filename>', methods=['DELETE'])
 def delete_file(filename):
     """Delete a file from videos or clips folder"""
