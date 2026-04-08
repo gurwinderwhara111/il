@@ -13,7 +13,7 @@
             <input type="file" id="video-upload" accept="video/*">
             <button type="button" id="upload-btn">Upload Video</button>
             <button type="button" id="test-btn">Test App</button>
-            <p style="font-size: 0.9rem; color: #666; margin-top: 10px;">⚠️ Max file size: ~100-200MB (nginx proxy limit)</p>
+            <p style="font-size: 0.9rem; color: #666; margin-top: 10px;">⚠️ Large files (>100MB) use chunked upload. Max ~500MB supported.</p>
         </div>
         <div id="status" class="status status-ready">Status: Ready</div>
         <div id="upload-progress" style="display: none; margin-bottom: 20px;">
@@ -47,6 +47,20 @@
         <div id="downloads" style="display: none;">
             <h2>Download Clips</h2>
             <div id="clip-list"></div>
+        </div>
+        <div id="file-manager" style="display: none; margin-top: 30px;">
+            <h2>File Manager</h2>
+            <button type="button" id="refresh-files-btn">Refresh Files</button>
+            <div id="files-list" style="margin-top: 20px;">
+                <div id="videos-section">
+                    <h3>Uploaded Videos</h3>
+                    <div id="videos-list"></div>
+                </div>
+                <div id="clips-section">
+                    <h3>Generated Clips</h3>
+                    <div id="clips-list"></div>
+                </div>
+            </div>
         </div>
         <div id="debug" style="display: none; margin-top: 20px;">
             <h2>Debug Log</h2>
