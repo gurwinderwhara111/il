@@ -1,3 +1,1 @@
-Flask>=2.3.0
-Werkzeug>=2.3.0
-moviepy>=1.0.3
+-r advance-clip-cutter/requirements.txt

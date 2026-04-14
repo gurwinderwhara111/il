@@ -1,0 +1,39 @@
+{
+  "name": "video-cutter-desktop",
+  "version": "1.0.0",
+  "description": "Video Cutter Desktop App",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "python ../../app.py & electron .",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "electron": "^25.0.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.videocutter.app",
+    "productName": "Video Cutter",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!build/**",
+      "!*.md"
+    ],
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "video-cutter",
+  "version": "1.0.0",
+  "description": "Flask-based vertical video cutter with chunked uploads and live composition controls",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "fluent-ffmpeg": "^2.1.2"
+  }
+}

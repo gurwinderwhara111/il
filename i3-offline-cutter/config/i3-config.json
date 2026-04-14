@@ -1,0 +1,44 @@
+{
+    "system": {
+        "name": "i3-offline-cutter",
+        "version": "1.0.0",
+        "target_system": "i3 11th Gen (8GB RAM)",
+        "optimization_level": "maximum"
+    },
+    "upload": {
+        "chunk_size_mb": 2,
+        "max_file_size_gb": 2,
+        "timeout_seconds": 300
+    },
+    "processing": {
+        "quality_mode": "fast",
+        "encoding": "stream_copy",
+        "sequential": true,
+        "max_parallel_operations": 1,
+        "cpu_warning_threshold": 80,
+        "ram_warning_threshold": 1500
+    },
+    "memory": {
+        "min_required_gb": 2,
+        "recommended_free_gb": 1,
+        "critical_threshold_mb": 500
+    },
+    "storage": {
+        "project_folder": "data/projects",
+        "temp_folder": "data/temp",
+        "cache_folder": "data/cache",
+        "auto_cleanup": true,
+        "cleanup_interval_minutes": 30
+    },
+    "flask": {
+        "host": "127.0.0.1",
+        "port": 5000,
+        "debug": false,
+        "threaded": false
+    },
+    "video": {
+        "allowed_formats": ["mp4", "mov", "mkv", "avi", "webm"],
+        "ffprobe_timeout": 10,
+        "ffmpeg_preset": "copy"
+    }
+}

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>i3 Video Cutter - Offline</title>
+    <link rel="stylesheet" href="styles-i3.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ i3 Video Cutter</h1>
+            <p class="subtitle">Lightweight • Offline • Fast</p>
+            <div class="system-info" id="system-info"></div>
+        </header>
+
+        <main>
+            <section id="upload-section" class="panel">
+                <h2>📤 Upload Video</h2>
+                <div class="upload-area">
+                    <input type="file" id="video-upload" accept="video/*">
+                    <button id="upload-btn" class="btn btn-primary">Upload Video</button>
+                </div>
+                <p class="info-text">Max 2GB • Chunked upload (2MB chunks) • Local storage</p>
+                
+                <div id="upload-progress" style="display: none;">
+                    <p id="progress-text">Uploading...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                </div>
+
+                <div id="video-info" style="display: none;">
+                    <video id="video-preview" controls></video>
+                    <p>Duration: <span id="duration">0</span> seconds</p>
+                </div>
+            </section>
+
+            <section id="cutting-section" style="display: none;" class="panel">
+                <h2>✂️ Cut Video</h2>
+                <div class="form-grid">
+                    <label>
+                        Clip Length (seconds)
+                        <input type="number" id="clip-length" min="1" placeholder="30">
+                    </label>
+                    <label>
+                        Start Time (seconds)
+                        <input type="number" id="start-time" min="0" placeholder="0">
+                    </label>
+                    <label>
+                        End Time (seconds)
+                        <input type="number" id="end-time" min="0" placeholder="0">
+                    </label>
+                </div>
+
+                <div class="info-box">
+                    <p id="clip-count"></p>
+                    <p id="estimate-time"></p>
+                </div>
+
+                <div class="button-group">
+                    <button id="calculate-btn" class="btn btn-secondary">📊 Calculate</button>
+                    <button id="cut-btn" class="btn btn-primary">✂️ Start Cutting</button>
+                </div>
+
+                <div id="cutting-progress" style="display: none;">
+                    <p id="cutting-status">Processing...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="cutting-progress-fill"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="downloads-section" style="display: none;" class="panel">
+                <h2>⬇️ Download Clips</h2>
+                <ol id="clip-list"></ol>
+            </section>
+
+            <section id="manager-section" class="panel">
+                <h2>📁 Project Manager</h2>
+                <div class="manager-stats">
+                    <div class="stat">
+                        <div class="stat-value" id="stat-projects">0</div>
+                        <div class="stat-label">Projects</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="stat-clips">0</div>
+                        <div class="stat-label">Total Clips</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="stat-storage">0 MB</div>
+                        <div class="stat-label">Storage</div>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button id="refresh-btn" class="btn btn-secondary">🔄 Refresh</button>
+                    <button id="cleanup-btn" class="btn btn-secondary">🧹 Cleanup Temp</button>
+                </div>
+
+                <div id="projects-list"></div>
+            </section>
+
+            <section id="log-section" class="panel">
+                <h2>📋 Debug Log</h2>
+                <div id="debug-log" class="log-box"></div>
+            </section>
+        </main>
+
+        <footer>
+            <p>i3 Video Cutter v1.0.0 • Offline Mode • All data stored locally</p>
+        </footer>
+    </div>
+
+    <script src="script-i3.js"></script>
+</body>
+</html>

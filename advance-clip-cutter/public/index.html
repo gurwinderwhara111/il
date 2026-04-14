@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Cutter</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Video Cutter</h1>
+            <div class="tabs" role="tablist" aria-label="Main navigation">
+                <button type="button" id="tab-upload" class="tab-button active" role="tab" aria-selected="true">Upload</button>
+                <button type="button" id="tab-manager" class="tab-button" role="tab" aria-selected="false">File Manager</button>
+            </div>
+        </header>
+
+        <main>
+            <section id="upload-page" class="panel" aria-labelledby="tab-upload">
+                <div class="panel-body">
+                    <div class="upload-grid">
+                        <input type="file" id="video-upload" accept="video/*">
+                        <div class="button-row">
+                            <button type="button" id="upload-btn" class="btn btn-primary">Upload Video</button>
+                            <button type="button" id="test-btn" class="btn btn-secondary">Test App</button>
+                        </div>
+                    </div>
+
+                    <p class="note">Files 8MB and larger use parallel 4MB chunk uploads for better Codespaces reliability. The app-side upload and storage quota now target up to 6GB, subject to actual free Codespaces disk space.</p>
+                    <div id="status" class="status status-ready">Status: Ready</div>
+
+                    <div id="upload-progress" class="panel-body" style="display: none;">
+                        <p id="upload-progress-text">Uploading video...</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="upload-progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <section class="metrics-panel">
+                        <h2>Realtime Metrics</h2>
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <span class="metric-label">Upload Speed</span>
+                                <strong id="metric-upload-current">0.0 Mbps</strong>
+                                <small id="metric-upload-average">Average 0.0 Mbps</small>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">Uploaded</span>
+                                <strong id="metric-upload-bytes">0 B / 0 B</strong>
+                                <small id="metric-upload-chunks">0 / 0 chunks</small>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">Timing</span>
+                                <strong id="metric-upload-elapsed">Elapsed 0s</strong>
+                                <small id="metric-upload-eta">ETA --</small>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">Storage</span>
+                                <strong id="metric-storage-used">0 B used</strong>
+                                <small id="metric-storage-remaining">0 B free in 6GB app quota</small>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">Disk Free</span>
+                                <strong id="metric-disk-free">--</strong>
+                                <small id="metric-disk-total">--</small>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">Render</span>
+                                <strong id="metric-render-current">Idle</strong>
+                                <small id="metric-render-elapsed">Elapsed 0s</small>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div id="composer-workspace" class="composer-workspace" style="display: none;">
+                        <aside id="video-info" class="composer-preview-column" style="display: none;">
+                            <div class="preview-shell">
+                                <div class="preview-frame" id="preview-frame">
+                                    <div class="preview-video-layer" id="preview-video-layer">
+                                        <video id="video-preview" controls playsinline></video>
+                                    </div>
+                                    <div class="preview-text-layer" id="preview-text-layer"></div>
+                                </div>
+                                <p class="preview-caption">Live 9:16 demo of the generated clip frame.</p>
+                            </div>
+
+                            <div class="workspace-meta">
+                                <p>Duration: <span id="duration"></span> seconds</p>
+                                <p id="clip-count" class="clip-preview-line"></p>
+                                <p id="clip-title-preview" class="clip-preview-line clip-preview-title"></p>
+                            </div>
+                        </aside>
+
+                        <div id="options" style="display: none;" class="composer-settings-column">
+                            <div class="settings-grid">
+                                <section class="settings-group">
+                                    <h2>Clip Settings</h2>
+                                    <div class="form-grid">
+                                        <label for="base-title">
+                                            Base Title
+                                            <input type="text" id="base-title" placeholder="John Wick Movie">
+                                        </label>
+                                        <label>
+                                            Clip Length
+                                            <input type="hidden" id="clip-length">
+                                            <div class="time-input-pair">
+                                                <div class="time-input-stack">
+                                                    <span class="time-label">Minutes</span>
+                                                    <input type="number" id="clip-length-minutes" min="0" step="1" placeholder="0">
+                                                </div>
+                                                <div class="time-input-stack">
+                                                    <span class="time-label">Seconds</span>
+                                                    <input type="number" id="clip-length-seconds" min="0" max="59.99" step="0.25" placeholder="0">
+                                                </div>
+                                            </div>
+                                        </label>
+                                        <label>
+                                            Start Time
+                                            <input type="hidden" id="start-time">
+                                            <div class="time-input-pair">
+                                                <div class="time-input-stack">
+                                                    <span class="time-label">Minutes</span>
+                                                    <input type="number" id="start-time-minutes" min="0" step="1" placeholder="0">
+                                                </div>
+                                                <div class="time-input-stack">
+                                                    <span class="time-label">Seconds</span>
+                                                    <input type="number" id="start-time-seconds" min="0" max="59.99" step="0.01" placeholder="0">
+                                                </div>
+                                            </div>
+                                        </label>
+                                        <label>
+                                            End Time
+                                            <input type="hidden" id="end-time">
+                                            <div class="time-input-pair">
+                                                <div class="time-input-stack">
+                                                    <span class="time-label">Minutes</span>
+                                                    <input type="number" id="end-time-minutes" min="0" step="1" placeholder="0">
+                                                </div>
+                                                <div class="time-input-stack">
+                                                    <span class="time-label">Seconds</span>
+                                                    <input type="number" id="end-time-seconds" min="0" max="59.99" step="0.01" placeholder="0">
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </section>
+
+                                <section class="settings-group">
+                                    <h2>Text Layout</h2>
+                                    <div class="control-grid">
+                                        <div class="control-row">
+                                            <label for="text-size-range">Text Size</label>
+                                            <div class="control-pair">
+                                                <input type="range" id="text-size-range" min="16" max="200" step="1">
+                                                <input type="number" id="text-size-number" min="16" max="200" step="1">
+                                            </div>
+                                        </div>
+                                        <div class="control-row">
+                                            <label for="text-x-range">Text X (%)</label>
+                                            <div class="control-pair">
+                                                <input type="range" id="text-x-range" min="0" max="100" step="1">
+                                                <input type="number" id="text-x-number" min="0" max="100" step="1">
+                                            </div>
+                                        </div>
+                                        <div class="control-row">
+                                            <label for="text-y-range">Text Y (%)</label>
+                                            <div class="control-pair">
+                                                <input type="range" id="text-y-range" min="0" max="100" step="1">
+                                                <input type="number" id="text-y-number" min="0" max="100" step="1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section class="settings-group">
+                                    <h2>Video Layout</h2>
+                                    <div class="control-grid">
+                                        <div class="control-row">
+                                            <label for="video-scale-range">Video Scale (%)</label>
+                                            <div class="control-pair">
+                                                <input type="range" id="video-scale-range" min="10" max="200" step="1">
+                                                <input type="number" id="video-scale-number" min="10" max="200" step="1">
+                                            </div>
+                                        </div>
+                                        <div class="control-row">
+                                            <label for="video-x-range">Video X (%)</label>
+                                            <div class="control-pair">
+                                                <input type="range" id="video-x-range" min="0" max="100" step="1">
+                                                <input type="number" id="video-x-number" min="0" max="100" step="1">
+                                            </div>
+                                        </div>
+                                        <div class="control-row">
+                                            <label for="video-y-range">Video Y (%)</label>
+                                            <div class="control-pair">
+                                                <input type="range" id="video-y-range" min="0" max="100" step="1">
+                                                <input type="number" id="video-y-number" min="0" max="100" step="1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+
+                            <div class="manager-actions">
+                                <button type="button" id="calculate-btn" class="btn btn-secondary">Calculate Clips</button>
+                                <button type="button" id="recalculate-btn" class="btn btn-secondary">Recalculate</button>
+                                <button type="button" id="cut-btn" class="btn btn-primary">Start Cutting</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="progress" style="display: none;">
+                        <p>Cutting videos...</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <div id="downloads" style="display: none;">
+                        <div class="downloads-header">
+                            <h2>Download Clips</h2>
+                            <button type="button" id="download-all-btn" class="btn btn-primary">Download All Clips</button>
+                        </div>
+                        <p class="note">Folder save works on supported browsers. Otherwise the app starts each clip download one by one.</p>
+                        <ol id="clip-list"></ol>
+                    </div>
+                </div>
+            </section>
+
+            <section id="manager-page" class="panel" style="display: none;" aria-labelledby="tab-manager">
+                <div class="manager-header">
+                    <div>
+                        <h2>Project File Manager</h2>
+                        <p>Organize, manage, reopen, and preview all your saved projects.</p>
+                    </div>
+                </div>
+
+                <div class="projects-header">
+                    <div class="storage-info">
+                        <div class="storage-bar">
+                            <label>Storage:</label>
+                            <div class="storage-progress">
+                                <div class="storage-fill" id="storage-fill"></div>
+                            </div>
+                        </div>
+                        <span class="storage-text" id="storage-summary">Calculating...</span>
+                    </div>
+                </div>
+
+                <div class="manager-stats">
+                    <div class="stat-card">
+                        <div class="stat-card-value" id="stat-projects">0</div>
+                        <div class="stat-card-label">Projects</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-value" id="stat-clips">0</div>
+                        <div class="stat-card-label">Total Clips</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-value" id="stat-storage">0 MB</div>
+                        <div class="stat-card-label">Used Storage</div>
+                    </div>
+                </div>
+
+                <div class="manager-actions" style="margin-bottom: 24px;">
+                    <button type="button" id="refresh-projects-btn" class="btn btn-secondary">Refresh</button>
+                    <button type="button" id="delete-selected-btn" class="btn btn-danger">Delete Selected</button>
+                    <button type="button" id="delete-all-btn" class="btn btn-danger">Delete All Projects</button>
+                    <button type="button" id="cleanup-temp-btn" class="btn btn-secondary">Cleanup Temp Files</button>
+                </div>
+
+                <div id="projects-list" class="projects-list"></div>
+            </section>
+
+            <section id="debug" class="panel debug-panel" style="display: none;">
+                <h2>Debug Log</h2>
+                <pre id="debug-log"></pre>
+            </section>
+        </main>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>

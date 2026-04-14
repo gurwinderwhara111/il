@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Generated app data
+uploads/
+advance-clip-cutter/uploads/
+dist/
+build/
+advance-clip-cutter/dist/
+advance-clip-cutter/build/
+
+# Local OS/editor noise
+.DS_Store
+Thumbs.db
+.env
